@@ -1,0 +1,8 @@
+admin
+NK8q7mfqqNUa5KNY
+
+
+mongodb+srv://admin:<password>@cluster0-nkzju.mongodb.net/test
+
+MONGO URL
+mongodb+srv://admin:NK8q7mfqqNUa5KNY@cluster0-nkzju.mongodb.net/cafe
