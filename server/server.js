@@ -10,9 +10,6 @@ const app = express();
 
 const bodyParser = require('body-parser');
 
-//================
-
-//================
 
 // parse application/x-www-form-urlencoded
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -21,12 +18,22 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
 
-//ESTO DEBERIA ESTAR EN usuario.js =======================
+//===================================================
+//ESTO DEBERIA ESTAR EN usuario.js
+
 const Usuario = require('./models/usuario');
 const { response } = require('express');
 const usuario = require('./models/usuario');
 
-app.get('/usuario', function(req, res) {
+const { verificaToken, verificaAdmin_Role } = require('./middlewares/autenticacion');
+
+app.get('/usuario', verificaToken, (req, res) => {
+
+    // return res.json({
+    //     usuario: req.usuario,
+    //     nombre: req.usuario.nombre,
+    //     email: req.usuario.email
+    // });
 
     let desde = req.query.desde || 0;
     desde = Number(desde);
@@ -63,7 +70,7 @@ app.get('/usuario', function(req, res) {
 
 });
 
-app.post('/usuario', function(req, res) {
+app.post('/usuario', [verificaToken, verificaAdmin_Role], function(req, res) {
     let body = req.body;
     console.log(body); //hshshdshihgoirghorjo
 
@@ -97,7 +104,7 @@ app.post('/usuario', function(req, res) {
 
 });
 
-app.put('/usuario/:id', function(req, res) { //ACTUALIZAR USUARIO
+app.put('/usuario/:id', [verificaToken, verificaAdmin_Role], function(req, res) { //ACTUALIZAR USUARIO
 
     let id = req.params.id;
     //Seleccion a los campos permitidos para actualizar por este metodo
@@ -120,10 +127,9 @@ app.put('/usuario/:id', function(req, res) { //ACTUALIZAR USUARIO
         }
     });
 
-    //res.json({ identificador });
 });
 
-app.delete('/usuario/:id', function(req, res) {
+app.delete('/usuario/:id', [verificaToken, verificaAdmin_Role], function(req, res) {
 
     let id = req.params.id;
     let cambiaEstado = {
@@ -156,7 +162,53 @@ app.delete('/usuario/:id', function(req, res) {
 
 });
 //========================================================
-app.use = (require('./routes/usuario'));
+//ESTO DEBERIA ESTAR EN LOGIN.JS
+const jwt = require('jsonwebtoken');
+
+
+app.post('/login', (req, res) => {
+
+    let body = req.body;
+
+    Usuario.findOne({ email: body.email }, (err, usuarioDB) => {
+        if (err) {
+            res.json({
+                ok: false,
+                err: err
+            });
+        } else {
+            if (!usuarioDB) {
+                res.json({
+                    ok: false,
+                    err: { message: '(Usuario) o contrasena incorrectos!' }
+                });
+            } else {
+                if (!bcrypt.compareSync(body.password, usuarioDB.password)) {
+                    res.json({
+                        ok: false,
+                        err: { message: 'Usuario o (contrasena) incorrectos!' }
+                    });
+                } else {
+
+                    let token = jwt.sign({
+                        usuario: usuarioDB
+                    }, process.env.SEED, { expiresIn: process.env.CADUCIDAD_TOKEN });
+
+                    res.json({
+                        ok: true,
+                        usuario: usuarioDB,
+                        token: token
+                    });
+                }
+            }
+        }
+    })
+
+});
+
+//============================================
+
+
 
 mongoose.connect(process.env.urlDB, {
     useNewUrlParser: true,
