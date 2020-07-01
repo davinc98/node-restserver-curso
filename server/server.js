@@ -3,6 +3,8 @@ require('./config/config');
 const express = require('express');
 const mongoose = require('mongoose');
 
+const path = require('path'); //Para resolver problema de la carpeta public
+
 const bcrypt = require('bcrypt');
 const _ = require('underscore');
 
@@ -16,6 +18,9 @@ app.use(bodyParser.urlencoded({ extended: false }));
 
 // parse application/json
 app.use(bodyParser.json());
+
+//Habilitar la carpeta public
+app.use(express.static(path.resolve(__dirname, '../public')));
 
 
 //===================================================
@@ -107,6 +112,7 @@ app.post('/usuario', [verificaToken, verificaAdmin_Role], function(req, res) {
 app.put('/usuario/:id', [verificaToken, verificaAdmin_Role], function(req, res) { //ACTUALIZAR USUARIO
 
     let id = req.params.id;
+
     //Seleccion a los campos permitidos para actualizar por este metodo
     let body = _.pick(req.body, ['nombre', 'email', 'role', 'estado']);
 
@@ -165,11 +171,13 @@ app.delete('/usuario/:id', [verificaToken, verificaAdmin_Role], function(req, re
 //ESTO DEBERIA ESTAR EN LOGIN.JS
 const jwt = require('jsonwebtoken');
 
+const { OAuth2Client } = require('google-auth-library');
+const client = new OAuth2Client(process.env.CLIENT_ID);
+
+
 
 app.post('/login', (req, res) => {
-
     let body = req.body;
-
     Usuario.findOne({ email: body.email }, (err, usuarioDB) => {
         if (err) {
             res.json({
@@ -203,7 +211,111 @@ app.post('/login', (req, res) => {
             }
         }
     })
+});
 
+//Configuracion de Google
+async function verify(token) {
+    const ticket = await client.verifyIdToken({
+        idToken: token,
+        audience: process.env.CLIENT_ID
+    });
+
+    const payload = ticket.getPayload();
+
+    //console.log(payload);
+
+    return {
+        name: payload.name,
+        email: payload.email,
+        img: payload.img,
+        google: true
+    }
+}
+//verify().catch(console.error);
+
+
+app.post('/google', async(req, res) => {
+    let token = req.body.idtoken;
+
+    let googleUser = await verify(token)
+        .catch(e => {
+            return res.json({
+                ok: false,
+                err: e
+            });
+        });
+
+    //console.log(googleUser);
+
+    Usuario.findOne({ email: googleUser.email }, (err, usuarioDB) => {
+
+        if (err) {
+            console.log('ERROR 11');
+            return res.json({
+                ok: false,
+                err
+            });
+        } else {
+            console.log('OKAY 12');
+            if (usuarioDB) {
+                //console.log('El usuario existe!');
+                if (usuarioDB.google === false) {
+                    return res.json({
+                        ok: false,
+                        err: {
+                            message: 'Debes usar autenticacion normal'
+                        }
+                    });
+
+                } else {
+                    let token = jwt.sign({
+                        usuario: usuarioDB
+                    }, process.env.SEED, { expiresIn: process.env.CADUCIDAD_TOKEN });
+
+                    return res.json({
+                        ok: true,
+                        usuario: usuarioDB,
+                        token
+                    });
+                }
+
+
+            } else {
+
+                //Si el usuario no existe en la BD
+                let usuario = new Usuario();
+
+                usuario.nombre = googleUser.name;
+                usuario.email = googleUser.email;
+                usuario.img = googleUser.img;
+                usuario.google = true;
+                usuario.password = ':)';
+
+                //console.log(usuario);
+
+                usuario.save((err, usuarioDB) => {
+                    if (err) {
+                        console.log('ERROR 123');
+                        return res.json({
+                            ok: false,
+                            err
+                        });
+                    } else {
+
+                        let token = jwt.sign({
+                            usuario: usuarioDB
+                        }, process.env.SEED, { expiresIn: process.env.CADUCIDAD_TOKEN });
+
+                        return res.json({
+                            ok: true,
+                            usuario: usuarioDB,
+                            token
+                        });
+                    }
+                });
+            }
+        }
+    });
 });
 
 //============================================
