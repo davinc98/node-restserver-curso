@@ -1,5 +1,10 @@
 const express = require('express');
+
 const app = express();
 
-require('./login.js');
-require('./usuario.js');
+app.use(require('./login'));
+app.use(require('./usuario'));
+app.use(require('./categoria'));
+app.use(require('./producto'));
+
+module.exports = app;
